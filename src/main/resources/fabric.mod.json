@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "id": "dmgplus",
+  "version": "${version}",
+  "name": "DMGplus",
+  "description": "Client-side Fabric mod providing custom knockback mechanics for the Block Dash minigame.",
+  "authors": [
+    "daniellaur"
+  ],
+  "contact": {
+    "sources": "https://github.com/daniellaur/DMGplus"
+  },
+  "license": "MIT",
+  "icon": "icon.png",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "github.daniellaur.dmgplus.client.DmgplusClient"
+    ],
+    "main": [
+      "github.daniellaur.dmgplus.Dmgplus"
+    ]
+  },
+  "mixins": [
+    "dmgplus.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=${loader_version}",
+    "fabric-api": "*",
+    "minecraft": "${minecraft_version}"
+  }
+}
