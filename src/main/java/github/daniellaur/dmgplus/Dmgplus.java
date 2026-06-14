@@ -43,6 +43,36 @@ public class Dmgplus implements ModInitializer {
                     buf -> new DmgplusClient.WallVelocityPayload(buf.readDouble(), buf.readDouble())
             );
 
+    private static final PacketCodec<PacketByteBuf, DmgplusClient.WallSnapshotPayload> WALL_SNAPSHOT_CODEC =
+            PacketCodec.of(
+                    (payload, buf) -> {
+                        buf.writeInt(payload.entries().size());
+                        for (DmgplusClient.WallEntry e : payload.entries()) {
+                            buf.writeLong(e.uuid().getMostSignificantBits());
+                            buf.writeLong(e.uuid().getLeastSignificantBits());
+                            buf.writeBoolean(e.isMgBd());
+                        }
+                    },
+                    buf -> {
+                        int count = buf.readInt();
+                        List<DmgplusClient.WallEntry> entries = new ArrayList<>(count);
+                        for (int i = 0; i < count; i++) {
+                            UUID uuid = new UUID(buf.readLong(), buf.readLong());
+                            entries.add(new DmgplusClient.WallEntry(uuid, buf.readBoolean()));
+                        }
+                        return new DmgplusClient.WallSnapshotPayload(entries);
+                    }
+            );
+
+    private static final PacketCodec<PacketByteBuf, DmgplusClient.AuthorizeTpPayload> AUTHORIZE_TP_CODEC =
+            PacketCodec.of(
+                    (payload, buf) -> buf.writeByte(1),
+                    buf -> {
+                        buf.readByte();
+                        return new DmgplusClient.AuthorizeTpPayload();
+                    }
+            );
+
     private static final PacketCodec<PacketByteBuf, WallConfig> WALL_CONFIG_CODEC = PacketCodec.of(
             (cfg, buf) -> {
                 buf.writeBoolean(cfg.knockbackEnabled);
@@ -185,6 +215,8 @@ public class Dmgplus implements ModInitializer {
         );
 
         PayloadTypeRegistry.playS2C().register(DmgplusClient.WALL_VELOCITY_ID, WALL_VELOCITY_CODEC);
+        PayloadTypeRegistry.playS2C().register(DmgplusClient.WALL_SNAPSHOT_ID, WALL_SNAPSHOT_CODEC);
+        PayloadTypeRegistry.playS2C().register(DmgplusClient.AUTHORIZE_TP_ID, AUTHORIZE_TP_CODEC);
         PayloadTypeRegistry.playS2C().register(DmgplusClient.BOOSTPAD_CONFIG_ID, BOOSTPAD_CONFIG_CODEC);
         PayloadTypeRegistry.playS2C().register(DmgplusClient.SPEEDPAD_CONFIG_ID, SPEEDPAD_CONFIG_CODEC);
     }

@@ -22,6 +22,9 @@ public class PositionCorrectMixin {
 
         MinecraftClient client = MinecraftClient.getInstance();
         if (client.player == null) return;
+
+        if (WallCollisionHandler.authorizedTeleportTicks > 0) return;
+
         boolean suppress = WallCollisionHandler.nearWall
                 || WallCollisionHandler.suppressTicks > 0
                 || WallCollisionHandler.recentKnockbackTicks > 0

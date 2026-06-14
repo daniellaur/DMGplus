@@ -20,10 +20,11 @@ public class WallCollisionHandler {
     private static final Map<UUID, Integer> cooldowns     = new HashMap<>();
     private static final Map<UUID, Vec3d>   prevPositions = new HashMap<>();
 
-    public static int     suppressTicks        = 0;
-    public static int     recentKnockbackTicks = 0;
-    public static int     recentNearWallTicks  = 0;
-    public static boolean nearWall             = false;
+    public static int     suppressTicks         = 0;
+    public static int     recentKnockbackTicks  = 0;
+    public static int     recentNearWallTicks   = 0;
+    public static int     authorizedTeleportTicks = 0;
+    public static boolean nearWall              = false;
 
     public static void register() {
         ClientTickEvents.START_CLIENT_TICK.register(WallCollisionHandler::tick);
@@ -35,6 +36,7 @@ public class WallCollisionHandler {
         if (suppressTicks > 0) suppressTicks--;
         if (recentKnockbackTicks > 0) recentKnockbackTicks--;
         if (recentNearWallTicks > 0) recentNearWallTicks--;
+        if (authorizedTeleportTicks > 0) authorizedTeleportTicks--;
 
         Iterator<Map.Entry<UUID, Integer>> it = cooldowns.entrySet().iterator();
         while (it.hasNext()) {
@@ -87,7 +89,8 @@ public class WallCollisionHandler {
         nearWall = foundNearWall;
         if (foundNearWall) recentNearWallTicks = 100;
 
-        if (cfg.suppressRubberband && (foundNearWall || recentKnockbackTicks > 0)) {
+        if (cfg.suppressRubberband && authorizedTeleportTicks == 0
+                && (foundNearWall || recentKnockbackTicks > 0)) {
             if (ClientPlayNetworking.canSend(DmgplusClient.PLAYER_KB_ID)) {
                 ClientPlayNetworking.send(new DmgplusClient.KbPayload(
                         player.getX(), player.getY(), player.getZ()));

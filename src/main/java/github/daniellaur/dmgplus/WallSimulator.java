@@ -66,8 +66,6 @@ public class WallSimulator {
         if (Double.compare(newBd, bdSpeed) != 0 || Double.compare(newMgBd, mgBdSpeed) != 0) {
             bdSpeed   = newBd;
             mgBdSpeed = newMgBd;
-            WallCollisionHandler.recentKnockbackTicks =
-                    Math.max(WallCollisionHandler.recentKnockbackTicks, 40);
         }
 
         for (Entity entity : client.world.getEntities()) {

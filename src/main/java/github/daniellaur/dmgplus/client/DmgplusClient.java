@@ -17,7 +17,9 @@ import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.network.packet.CustomPayload;
 import net.minecraft.util.Identifier;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 public class DmgplusClient implements ClientModInitializer {
@@ -34,6 +36,10 @@ public class DmgplusClient implements ClientModInitializer {
             new CustomPayload.Id<>(Identifier.of("blockdash", "hello"));
     public static final CustomPayload.Id<WallVelocityPayload> WALL_VELOCITY_ID =
             new CustomPayload.Id<>(Identifier.of("blockdash", "wall_velocity"));
+    public static final CustomPayload.Id<WallSnapshotPayload> WALL_SNAPSHOT_ID =
+            new CustomPayload.Id<>(Identifier.of("blockdash", "wall_snapshot"));
+    public static final CustomPayload.Id<AuthorizeTpPayload> AUTHORIZE_TP_ID =
+            new CustomPayload.Id<>(Identifier.of("blockdash", "authorize_tp"));
 
     public static final CustomPayload.Id<BoostPadConfigPayload> BOOSTPAD_CONFIG_ID =
             new CustomPayload.Id<>(Identifier.of("boostpads", "config"));
@@ -64,6 +70,16 @@ public class DmgplusClient implements ClientModInitializer {
 
     public record WallVelocityPayload(double bdSpeed, double mgBdSpeed) implements CustomPayload {
         @Override public CustomPayload.Id<WallVelocityPayload> getId() { return WALL_VELOCITY_ID; }
+    }
+
+    public record WallEntry(UUID uuid, boolean isMgBd) {}
+
+    public record WallSnapshotPayload(List<WallEntry> entries) implements CustomPayload {
+        @Override public CustomPayload.Id<WallSnapshotPayload> getId() { return WALL_SNAPSHOT_ID; }
+    }
+
+    public record AuthorizeTpPayload() implements CustomPayload {
+        @Override public CustomPayload.Id<AuthorizeTpPayload> getId() { return AUTHORIZE_TP_ID; }
     }
 
     public record BoostPadConfigPayload(List<BoostPadConfig> configs) implements CustomPayload {
@@ -111,6 +127,27 @@ public class DmgplusClient implements ClientModInitializer {
 
         ClientPlayNetworking.registerGlobalReceiver(WALL_VELOCITY_ID,
                 (payload, context) -> WallSimulator.setVelocity(payload.bdSpeed(), payload.mgBdSpeed()));
+
+        ClientPlayNetworking.registerGlobalReceiver(WALL_SNAPSHOT_ID,
+                (payload, context) -> {
+                    Set<UUID> snapshot = new HashSet<>();
+                    for (WallEntry entry : payload.entries()) {
+                        snapshot.add(entry.uuid());
+                        if (!WallRegistry.isWall(entry.uuid())) {
+                            WallRegistry.register(entry.uuid());
+                            WallSimulator.register(entry.uuid(), entry.isMgBd());
+                        }
+                    }
+                    for (UUID id : WallRegistry.all()) {
+                        if (!snapshot.contains(id)) {
+                            WallRegistry.unregister(id);
+                            WallSimulator.unregister(id);
+                        }
+                    }
+                });
+
+        ClientPlayNetworking.registerGlobalReceiver(AUTHORIZE_TP_ID,
+                (payload, context) -> WallCollisionHandler.authorizedTeleportTicks = 10);
 
         ClientPlayNetworking.registerGlobalReceiver(BOOSTPAD_CONFIG_ID,
                 (payload, context) -> BoostPadRegistry.set(payload.configs()));
