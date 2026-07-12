@@ -7,7 +7,6 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.entity.Entity;
 import net.minecraft.util.math.Box;
-import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
 
 import java.util.HashMap;
@@ -17,17 +16,28 @@ import java.util.UUID;
 
 public class WallCollisionHandler {
 
-    private static final Map<UUID, Integer> cooldowns     = new HashMap<>();
-    private static final Map<UUID, Vec3d>   prevPositions = new HashMap<>();
+    private static final Map<UUID, Integer> cooldowns = new HashMap<>();
 
-    public static int     suppressTicks         = 0;
-    public static int     recentKnockbackTicks  = 0;
-    public static int     recentNearWallTicks   = 0;
-    public static int     authorizedTeleportTicks = 0;
-    public static boolean nearWall              = false;
+    public static int     suppressTicks           = 0;
+    public static int     recentKnockbackTicks     = 0;
+    public static int     recentNearWallTicks      = 0;
+    public static int     authorizedTeleportTicks  = 0;
+    public static int     joinGraceTicks           = 0;
+    public static boolean nearWall                 = false;
 
     public static void register() {
         ClientTickEvents.START_CLIENT_TICK.register(WallCollisionHandler::tick);
+    }
+
+    private static Box inflate(Box raw, WallConfig cfg) {
+        return new Box(
+                raw.minX - cfg.inflateX,
+                raw.minY + cfg.inflateYmin,
+                raw.minZ - cfg.inflateZ,
+                raw.maxX + cfg.inflateX,
+                raw.maxY - cfg.inflateYmax,
+                raw.maxZ + cfg.inflateZ
+        );
     }
 
     private static void tick(MinecraftClient client) {
@@ -37,6 +47,7 @@ public class WallCollisionHandler {
         if (recentKnockbackTicks > 0) recentKnockbackTicks--;
         if (recentNearWallTicks > 0) recentNearWallTicks--;
         if (authorizedTeleportTicks > 0) authorizedTeleportTicks--;
+        if (joinGraceTicks > 0) joinGraceTicks--;
 
         Iterator<Map.Entry<UUID, Integer>> it = cooldowns.entrySet().iterator();
         while (it.hasNext()) {
@@ -47,15 +58,7 @@ public class WallCollisionHandler {
 
         WallConfig cfg = ConfigManager.get();
         ClientPlayerEntity player = client.player;
-        Box playerBox = player.getBoundingBox().expand(cfg.inflateX, cfg.inflateY, cfg.inflateZ);
-        int pingTicks = 0;
-        if (cfg.lagCompensation && client.getNetworkHandler() != null) {
-            var entry = client.getNetworkHandler().getPlayerListEntry(player.getUuid());
-            if (entry != null) {
-                int pingMs = entry.getLatency();
-                pingTicks = Math.min(cfg.maxCompensationTicks, Math.max(0, (pingMs + 25) / 50));
-            }
-        }
+        Box playerBox = inflate(player.getBoundingBox(), cfg);
 
         double suppressRadiusSq = cfg.suppressRadius * cfg.suppressRadius;
         boolean foundNearWall = false;
@@ -71,25 +74,16 @@ public class WallCollisionHandler {
             double dz = player.getZ() - entity.getZ();
             if (dx * dx + dy * dy + dz * dz <= suppressRadiusSq) foundNearWall = true;
 
-            Vec3d pos = new Vec3d(wallX, entity.getY(), entity.getZ());
-            Vec3d prev = prevPositions.put(entity.getUuid(), pos);
-            double wallDx = 0;
-            if (prev != null) {
-                wallDx = MathHelper.clamp(pos.x - prev.x, -cfg.maxDxPerTick, cfg.maxDxPerTick);
-            }
-
             Box rawBox = entity.getBoundingBox();
             double boxCenterX = (rawBox.minX + rawBox.maxX) / 2.0;
-            Box wallBox = rawBox
-                    .offset(wallX - boxCenterX, 0, 0)
-                    .expand(cfg.inflateX, cfg.inflateY, cfg.inflateZ);
-            handleWall(player, playerBox, wallBox, entity.getUuid(), wallDx, pingTicks, cfg);
+            Box wallBox = inflate(rawBox.offset(wallX - boxCenterX, 0, 0), cfg);
+            handleWall(player, playerBox, wallBox, entity.getUuid(), cfg);
         }
 
         nearWall = foundNearWall;
         if (foundNearWall) recentNearWallTicks = 100;
 
-        if (cfg.suppressRubberband && authorizedTeleportTicks == 0
+        if (cfg.suppressRubberband && authorizedTeleportTicks == 0 && joinGraceTicks == 0
                 && (foundNearWall || recentKnockbackTicks > 0)) {
             if (ClientPlayNetworking.canSend(DmgplusClient.PLAYER_KB_ID)) {
                 ClientPlayNetworking.send(new DmgplusClient.KbPayload(
@@ -99,26 +93,15 @@ public class WallCollisionHandler {
     }
 
     private static void handleWall(ClientPlayerEntity player, Box playerBox, Box wallBox,
-                                   UUID wallId, double wallDx, int pingTicks, WallConfig cfg) {
-        if (cooldowns.containsKey(wallId)) return;
-
-        double spd = Math.max(0, wallDx);
-        if (!playerBox.intersects(wallBox)) return;
-        double overlapX = Math.min(playerBox.maxX, wallBox.maxX) - Math.max(playerBox.minX, wallBox.minX);
-        if (overlapX < cfg.minPenetration) return;
-
+                                   UUID wallId, WallConfig cfg) {
         if (!cfg.knockbackEnabled) return;
+        if (!playerBox.intersects(wallBox)) return;
 
-        double headStart = spd * pingTicks * cfg.resolveAheadFactor;
-        double targetMinX = wallBox.maxX + headStart + cfg.epsilon;
-        double shiftX = targetMinX - playerBox.minX;
-        if (shiftX > 0) {
-            player.setPos(player.getX() + shiftX, player.getY(), player.getZ());
-        }
+        if (cooldowns.containsKey(wallId)) return;
 
         Vec3d vel = player.getVelocity();
 
-        double newX = Math.max(vel.x, Math.abs(cfg.pushBack));
+        double newX = Math.min(Math.max(vel.x, cfg.pushBackMin), cfg.pushBackMax);
         double newY = (player.isOnGround() || Math.abs(vel.y) < 0.08)
                 ? Math.max(vel.y, cfg.verticalBoost)
                 : vel.y;
@@ -131,7 +114,7 @@ public class WallCollisionHandler {
             cooldowns.put(wallId, cfg.cooldownTicks);
         }
 
-        suppressTicks        = Math.max(suppressTicks, cfg.cooldownTicks + pingTicks * 2 + 20);
+        suppressTicks        = Math.max(suppressTicks, cfg.cooldownTicks + 20);
         recentKnockbackTicks = Math.max(recentKnockbackTicks, 100);
     }
 }

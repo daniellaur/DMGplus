@@ -24,6 +24,7 @@ public class PositionCorrectMixin {
         if (client.player == null) return;
 
         if (WallCollisionHandler.authorizedTeleportTicks > 0) return;
+        if (WallCollisionHandler.joinGraceTicks > 0) return;
 
         boolean suppress = WallCollisionHandler.nearWall
                 || WallCollisionHandler.suppressTicks > 0

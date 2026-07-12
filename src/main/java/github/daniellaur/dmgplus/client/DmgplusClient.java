@@ -72,7 +72,7 @@ public class DmgplusClient implements ClientModInitializer {
         @Override public CustomPayload.Id<WallVelocityPayload> getId() { return WALL_VELOCITY_ID; }
     }
 
-    public record WallEntry(UUID uuid, boolean isMgBd) {}
+    public record WallEntry(UUID uuid, boolean isMgBd, List<UUID> members, double x) {}
 
     public record WallSnapshotPayload(List<WallEntry> entries) implements CustomPayload {
         @Override public CustomPayload.Id<WallSnapshotPayload> getId() { return WALL_SNAPSHOT_ID; }
@@ -101,6 +101,7 @@ public class DmgplusClient implements ClientModInitializer {
         SpeedPadHandler.register();
 
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
+            WallCollisionHandler.joinGraceTicks = 40;
             if (ClientPlayNetworking.canSend(HELLO_ID)) {
                 String version = FabricLoader.getInstance()
                         .getModContainer("dmgplus")
@@ -130,6 +131,7 @@ public class DmgplusClient implements ClientModInitializer {
 
         ClientPlayNetworking.registerGlobalReceiver(WALL_SNAPSHOT_ID,
                 (payload, context) -> {
+                    long now = WallSimulator.currentTick();
                     Set<UUID> snapshot = new HashSet<>();
                     for (WallEntry entry : payload.entries()) {
                         snapshot.add(entry.uuid());
@@ -137,6 +139,8 @@ public class DmgplusClient implements ClientModInitializer {
                             WallRegistry.register(entry.uuid());
                             WallSimulator.register(entry.uuid(), entry.isMgBd());
                         }
+                        WallSimulator.setMembers(entry.uuid(), entry.members());
+                        WallSimulator.anchor(entry.uuid(), entry.x(), now);
                     }
                     for (UUID id : WallRegistry.all()) {
                         if (!snapshot.contains(id)) {

@@ -5,18 +5,27 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.entity.Entity;
 import net.minecraft.util.math.Box;
 
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class WallSimulator {
 
-    private static final double CATCHUP = 1.0;
+    private record Anchor(double x, long tick) {}
 
-    private static final Map<UUID, Boolean> walls      = new ConcurrentHashMap<>();
-    private static final Set<UUID>          pending    = ConcurrentHashMap.newKeySet();
-    private static final Map<UUID, Double>  simulatedX = new ConcurrentHashMap<>();
+    private static final class WallData {
+        final boolean isMgBd;
+        volatile List<UUID> members = List.of();
+        volatile Anchor anchor = null;
+        double  lastSimX = 0;
+        boolean hasSim   = false;
+
+        WallData(boolean isMgBd) { this.isMgBd = isMgBd; }
+    }
+
+    private static final Map<UUID, WallData> walls = new ConcurrentHashMap<>();
 
     private static volatile double pendingBdSpeed   = 0;
     private static volatile double pendingMgBdSpeed = 0;
@@ -24,25 +33,37 @@ public class WallSimulator {
     private static double bdSpeed   = 0;
     private static double mgBdSpeed = 0;
 
+    private static volatile long clientTick = 0;
+
     public static void register(UUID uuid, boolean isMgBd) {
-        walls.put(uuid, isMgBd);
-        pending.add(uuid);
+        walls.computeIfAbsent(uuid, k -> new WallData(isMgBd));
+    }
+
+    public static void setMembers(UUID uuid, List<UUID> members) {
+        WallData d = walls.get(uuid);
+        if (d != null) d.members = members;
+    }
+
+    public static void anchor(UUID uuid, double x, long tick) {
+        WallData d = walls.get(uuid);
+        if (d != null) d.anchor = new Anchor(x, tick);
+    }
+
+    public static long currentTick() {
+        return clientTick;
     }
 
     public static void unregister(UUID uuid) {
         walls.remove(uuid);
-        pending.remove(uuid);
-        simulatedX.remove(uuid);
     }
 
     public static Double getSimulatedX(UUID uuid) {
-        return simulatedX.get(uuid);
+        WallData d = walls.get(uuid);
+        return (d == null || !d.hasSim) ? null : d.lastSimX;
     }
 
     public static void clear() {
         walls.clear();
-        pending.clear();
-        simulatedX.clear();
         bdSpeed          = 0;
         mgBdSpeed        = 0;
         pendingBdSpeed   = 0;
@@ -61,41 +82,40 @@ public class WallSimulator {
     private static void tick(MinecraftClient client) {
         if (client.world == null) return;
 
-        double newBd   = pendingBdSpeed;
-        double newMgBd = pendingMgBdSpeed;
-        if (Double.compare(newBd, bdSpeed) != 0 || Double.compare(newMgBd, mgBdSpeed) != 0) {
-            bdSpeed   = newBd;
-            mgBdSpeed = newMgBd;
+        clientTick++;
+        bdSpeed   = pendingBdSpeed;
+        mgBdSpeed = pendingMgBdSpeed;
+
+        Map<UUID, Entity> byUuid = new HashMap<>();
+        for (Entity e : client.world.getEntities()) {
+            byUuid.put(e.getUuid(), e);
         }
 
-        for (Entity entity : client.world.getEntities()) {
-            UUID uuid = entity.getUuid();
-            Boolean isMgBd = walls.get(uuid);
-            if (isMgBd == null) continue;
+        for (Map.Entry<UUID, WallData> entry : walls.entrySet()) {
+            WallData d = entry.getValue();
+            Entity shulker = byUuid.get(entry.getKey());
+            if (shulker == null) continue;
 
-            Box box = entity.getBoundingBox();
-            double serverX = (box.minX + box.maxX) / 2.0;
+            double speed = d.isMgBd ? mgBdSpeed : bdSpeed;
+            Anchor a = d.anchor;
 
             double simX;
-            if (pending.remove(uuid)) {
-                simX = serverX;
+            if (a != null && speed > 0) {
+                simX = a.x + (clientTick - a.tick) * speed;
             } else {
-                double speed     = isMgBd ? mgBdSpeed : bdSpeed;
-                double prev       = simulatedX.getOrDefault(uuid, serverX);
-                double predicted  = prev + speed;
-                simX = predicted + (serverX - predicted) * CATCHUP;
+                Box box = shulker.getBoundingBox();
+                double serverX = (box.minX + box.maxX) / 2.0;
+                simX = d.hasSim ? Math.max(d.lastSimX, serverX) : serverX;
             }
 
-            simulatedX.put(uuid, simX);
-            entity.setPos(simX, entity.getY(), entity.getZ());
+            d.lastSimX = simX;
+            d.hasSim   = true;
 
-            Entity vehicle = entity.getVehicle();
-            if (vehicle != null) {
-                vehicle.setPos(simX, vehicle.getY(), vehicle.getZ());
-                for (Entity passenger : vehicle.getPassengerList()) {
-                    if (passenger != entity) {
-                        passenger.setPos(simX, passenger.getY(), passenger.getZ());
-                    }
+            shulker.setPos(simX, shulker.getY(), shulker.getZ());
+            for (UUID memberUuid : d.members) {
+                Entity m = byUuid.get(memberUuid);
+                if (m != null) {
+                    m.setPos(simX, m.getY(), m.getZ());
                 }
             }
         }

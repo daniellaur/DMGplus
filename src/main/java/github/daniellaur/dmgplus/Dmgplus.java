@@ -51,6 +51,12 @@ public class Dmgplus implements ModInitializer {
                             buf.writeLong(e.uuid().getMostSignificantBits());
                             buf.writeLong(e.uuid().getLeastSignificantBits());
                             buf.writeBoolean(e.isMgBd());
+                            buf.writeDouble(e.x());
+                            buf.writeInt(e.members().size());
+                            for (UUID m : e.members()) {
+                                buf.writeLong(m.getMostSignificantBits());
+                                buf.writeLong(m.getLeastSignificantBits());
+                            }
                         }
                     },
                     buf -> {
@@ -58,7 +64,14 @@ public class Dmgplus implements ModInitializer {
                         List<DmgplusClient.WallEntry> entries = new ArrayList<>(count);
                         for (int i = 0; i < count; i++) {
                             UUID uuid = new UUID(buf.readLong(), buf.readLong());
-                            entries.add(new DmgplusClient.WallEntry(uuid, buf.readBoolean()));
+                            boolean isMgBd = buf.readBoolean();
+                            double x = buf.readDouble();
+                            int memberCount = buf.readInt();
+                            List<UUID> members = new ArrayList<>(memberCount);
+                            for (int j = 0; j < memberCount; j++) {
+                                members.add(new UUID(buf.readLong(), buf.readLong()));
+                            }
+                            entries.add(new DmgplusClient.WallEntry(uuid, isMgBd, members, x));
                         }
                         return new DmgplusClient.WallSnapshotPayload(entries);
                     }
@@ -76,36 +89,28 @@ public class Dmgplus implements ModInitializer {
     private static final PacketCodec<PacketByteBuf, WallConfig> WALL_CONFIG_CODEC = PacketCodec.of(
             (cfg, buf) -> {
                 buf.writeBoolean(cfg.knockbackEnabled);
-                buf.writeDouble(cfg.pushBack);
+                buf.writeDouble(cfg.pushBackMin);
+                buf.writeDouble(cfg.pushBackMax);
                 buf.writeDouble(cfg.verticalBoost);
                 buf.writeInt(cfg.cooldownTicks);
                 buf.writeDouble(cfg.inflateX);
-                buf.writeDouble(cfg.inflateY);
+                buf.writeDouble(cfg.inflateYmin);
+                buf.writeDouble(cfg.inflateYmax);
                 buf.writeDouble(cfg.inflateZ);
-                buf.writeBoolean(cfg.lagCompensation);
-                buf.writeInt(cfg.maxCompensationTicks);
-                buf.writeDouble(cfg.minPenetration);
-                buf.writeDouble(cfg.epsilon);
-                buf.writeDouble(cfg.resolveAheadFactor);
-                buf.writeDouble(cfg.maxDxPerTick);
                 buf.writeBoolean(cfg.suppressRubberband);
                 buf.writeDouble(cfg.suppressRadius);
             },
             buf -> {
                 WallConfig cfg = new WallConfig();
                 cfg.knockbackEnabled     = buf.readBoolean();
-                cfg.pushBack             = buf.readDouble();
+                cfg.pushBackMin          = buf.readDouble();
+                cfg.pushBackMax          = buf.readDouble();
                 cfg.verticalBoost        = buf.readDouble();
                 cfg.cooldownTicks        = buf.readInt();
                 cfg.inflateX             = buf.readDouble();
-                cfg.inflateY             = buf.readDouble();
+                cfg.inflateYmin          = buf.readDouble();
+                cfg.inflateYmax          = buf.readDouble();
                 cfg.inflateZ             = buf.readDouble();
-                cfg.lagCompensation      = buf.readBoolean();
-                cfg.maxCompensationTicks = buf.readInt();
-                cfg.minPenetration       = buf.readDouble();
-                cfg.epsilon              = buf.readDouble();
-                cfg.resolveAheadFactor   = buf.readDouble();
-                cfg.maxDxPerTick         = buf.readDouble();
                 cfg.suppressRubberband   = buf.readBoolean();
                 cfg.suppressRadius       = buf.readDouble();
                 return cfg;
