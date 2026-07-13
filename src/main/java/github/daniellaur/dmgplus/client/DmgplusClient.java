@@ -131,7 +131,6 @@ public class DmgplusClient implements ClientModInitializer {
 
         ClientPlayNetworking.registerGlobalReceiver(WALL_SNAPSHOT_ID,
                 (payload, context) -> {
-                    long now = WallSimulator.currentTick();
                     Set<UUID> snapshot = new HashSet<>();
                     for (WallEntry entry : payload.entries()) {
                         snapshot.add(entry.uuid());
@@ -140,7 +139,7 @@ public class DmgplusClient implements ClientModInitializer {
                             WallSimulator.register(entry.uuid(), entry.isMgBd());
                         }
                         WallSimulator.setMembers(entry.uuid(), entry.members());
-                        WallSimulator.anchor(entry.uuid(), entry.x(), now);
+                        WallSimulator.anchor(entry.uuid(), entry.x());
                     }
                     for (UUID id : WallRegistry.all()) {
                         if (!snapshot.contains(id)) {

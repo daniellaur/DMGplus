@@ -13,14 +13,14 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class WallSimulator {
 
-    private record Anchor(double x, long tick) {}
-
     private static final class WallData {
         final boolean isMgBd;
         volatile List<UUID> members = List.of();
-        volatile Anchor anchor = null;
-        double  lastSimX = 0;
+        volatile double  authX    = 0;
+        volatile boolean hasAuth  = false;
+        double  simX     = 0;
         boolean hasSim   = false;
+        boolean anchored = false;
 
         WallData(boolean isMgBd) { this.isMgBd = isMgBd; }
     }
@@ -33,8 +33,6 @@ public class WallSimulator {
     private static double bdSpeed   = 0;
     private static double mgBdSpeed = 0;
 
-    private static volatile long clientTick = 0;
-
     public static void register(UUID uuid, boolean isMgBd) {
         walls.computeIfAbsent(uuid, k -> new WallData(isMgBd));
     }
@@ -44,13 +42,12 @@ public class WallSimulator {
         if (d != null) d.members = members;
     }
 
-    public static void anchor(UUID uuid, double x, long tick) {
+    public static void anchor(UUID uuid, double x) {
         WallData d = walls.get(uuid);
-        if (d != null) d.anchor = new Anchor(x, tick);
-    }
-
-    public static long currentTick() {
-        return clientTick;
+        if (d != null) {
+            d.authX   = x;
+            d.hasAuth = true;
+        }
     }
 
     public static void unregister(UUID uuid) {
@@ -59,7 +56,7 @@ public class WallSimulator {
 
     public static Double getSimulatedX(UUID uuid) {
         WallData d = walls.get(uuid);
-        return (d == null || !d.hasSim) ? null : d.lastSimX;
+        return (d == null || !d.hasSim) ? null : d.simX;
     }
 
     public static void clear() {
@@ -82,7 +79,6 @@ public class WallSimulator {
     private static void tick(MinecraftClient client) {
         if (client.world == null) return;
 
-        clientTick++;
         bdSpeed   = pendingBdSpeed;
         mgBdSpeed = pendingMgBdSpeed;
 
@@ -97,25 +93,25 @@ public class WallSimulator {
             if (shulker == null) continue;
 
             double speed = d.isMgBd ? mgBdSpeed : bdSpeed;
-            Anchor a = d.anchor;
 
-            double simX;
-            if (a != null && speed > 0) {
-                simX = a.x + (clientTick - a.tick) * speed;
+            if (!d.anchored && d.hasAuth) {
+                d.simX     = d.authX;
+                d.anchored = true;
+            } else if (d.anchored && speed > 0) {
+                d.simX += speed;
             } else {
                 Box box = shulker.getBoundingBox();
                 double serverX = (box.minX + box.maxX) / 2.0;
-                simX = d.hasSim ? Math.max(d.lastSimX, serverX) : serverX;
+                d.simX = d.hasSim ? Math.max(d.simX, serverX) : serverX;
             }
 
-            d.lastSimX = simX;
-            d.hasSim   = true;
+            d.hasSim = true;
 
-            shulker.setPos(simX, shulker.getY(), shulker.getZ());
+            shulker.setPos(d.simX, shulker.getY(), shulker.getZ());
             for (UUID memberUuid : d.members) {
                 Entity m = byUuid.get(memberUuid);
                 if (m != null) {
-                    m.setPos(simX, m.getY(), m.getZ());
+                    m.setPos(d.simX, m.getY(), m.getZ());
                 }
             }
         }
