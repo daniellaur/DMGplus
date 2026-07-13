@@ -78,6 +78,7 @@ public class WallSimulator {
 
     private static void tick(MinecraftClient client) {
         if (client.world == null) return;
+        if (walls.isEmpty()) return;
 
         bdSpeed   = pendingBdSpeed;
         mgBdSpeed = pendingMgBdSpeed;

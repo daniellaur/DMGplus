@@ -58,26 +58,28 @@ public class WallCollisionHandler {
 
         WallConfig cfg = ConfigManager.get();
         ClientPlayerEntity player = client.player;
-        Box playerBox = inflate(player.getBoundingBox(), cfg);
 
         double suppressRadiusSq = cfg.suppressRadius * cfg.suppressRadius;
         boolean foundNearWall = false;
 
-        for (Entity entity : client.world.getEntities()) {
-            if (!WallRegistry.isWall(entity.getUuid())) continue;
+        if (!WallRegistry.isEmpty()) {
+            Box playerBox = inflate(player.getBoundingBox(), cfg);
+            for (Entity entity : client.world.getEntities()) {
+                if (!WallRegistry.isWall(entity.getUuid())) continue;
 
-            Double simX = WallSimulator.getSimulatedX(entity.getUuid());
-            double wallX = simX != null ? simX : entity.getX();
+                Double simX = WallSimulator.getSimulatedX(entity.getUuid());
+                double wallX = simX != null ? simX : entity.getX();
 
-            double dx = player.getX() - wallX;
-            double dy = player.getY() - entity.getY();
-            double dz = player.getZ() - entity.getZ();
-            if (dx * dx + dy * dy + dz * dz <= suppressRadiusSq) foundNearWall = true;
+                double dx = player.getX() - wallX;
+                double dy = player.getY() - entity.getY();
+                double dz = player.getZ() - entity.getZ();
+                if (dx * dx + dy * dy + dz * dz <= suppressRadiusSq) foundNearWall = true;
 
-            Box rawBox = entity.getBoundingBox();
-            double boxCenterX = (rawBox.minX + rawBox.maxX) / 2.0;
-            Box wallBox = inflate(rawBox.offset(wallX - boxCenterX, 0, 0), cfg);
-            handleWall(player, playerBox, wallBox, entity.getUuid(), cfg);
+                Box rawBox = entity.getBoundingBox();
+                double boxCenterX = (rawBox.minX + rawBox.maxX) / 2.0;
+                Box wallBox = inflate(rawBox.offset(wallX - boxCenterX, 0, 0), cfg);
+                handleWall(player, playerBox, wallBox, entity.getUuid(), cfg);
+            }
         }
 
         nearWall = foundNearWall;

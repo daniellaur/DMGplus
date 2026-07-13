@@ -30,4 +30,8 @@ public class WallRegistry {
     public static boolean isWall(UUID uuid) {
         return wallUuids.contains(uuid);
     }
+
+    public static boolean isEmpty() {
+        return wallUuids.isEmpty();
+    }
 }

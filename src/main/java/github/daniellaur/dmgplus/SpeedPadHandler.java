@@ -34,6 +34,7 @@ public class SpeedPadHandler {
     private static void tick(MinecraftClient client) {
         if (client.player == null || client.world == null) return;
         if (client.player.isSpectator()) return;
+        if (!ClientPlayNetworking.canSend(DmgplusClient.SPEEDPAD_ACTIVATE_ID)) return;
 
         ClientPlayerEntity player = client.player;
         SpeedPadConfig cfg = getSpeedPadUnder(client, player);
