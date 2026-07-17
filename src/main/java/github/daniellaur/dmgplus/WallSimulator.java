@@ -43,6 +43,7 @@ public class WallSimulator {
     }
 
     public static void anchor(UUID uuid, double x) {
+        if (!Double.isFinite(x)) return;
         WallData d = walls.get(uuid);
         if (d != null) {
             d.authX   = x;
@@ -68,8 +69,8 @@ public class WallSimulator {
     }
 
     public static void setVelocity(double bd, double mgBd) {
-        pendingBdSpeed   = bd;
-        pendingMgBdSpeed = mgBd;
+        pendingBdSpeed   = Double.isFinite(bd) ? bd : 0;
+        pendingMgBdSpeed = Double.isFinite(mgBd) ? mgBd : 0;
     }
 
     public static void registerTick() {

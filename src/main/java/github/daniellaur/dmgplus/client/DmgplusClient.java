@@ -48,6 +48,14 @@ public class DmgplusClient implements ClientModInitializer {
     public static final CustomPayload.Id<SpeedPadActivatePayload> SPEEDPAD_ACTIVATE_ID =
             new CustomPayload.Id<>(Identifier.of("boostpads", "speedpad_activate"));
 
+    public static final CustomPayload.Id<BorderTintPayload> BORDER_TINT_ID =
+            new CustomPayload.Id<>(Identifier.of("roundworldborder", "tint"));
+
+    public static final CustomPayload.Id<ShootPayload> COWSTRIKE_SHOOT_ID =
+            new CustomPayload.Id<>(Identifier.of("cowstrike", "shoot"));
+    public static final CustomPayload.Id<StatePayload> COWSTRIKE_STATE_ID =
+            new CustomPayload.Id<>(Identifier.of("cowstrike", "state"));
+
     public record WallRegisterPayload(UUID uuid, boolean isMgBd) implements CustomPayload {
         @Override public CustomPayload.Id<WallRegisterPayload> getId() { return WALL_REGISTER_ID; }
     }
@@ -94,13 +102,30 @@ public class DmgplusClient implements ClientModInitializer {
         @Override public CustomPayload.Id<SpeedPadActivatePayload> getId() { return SPEEDPAD_ACTIVATE_ID; }
     }
 
+    public record BorderTintPayload(boolean outside) implements CustomPayload {
+        @Override public CustomPayload.Id<BorderTintPayload> getId() { return BORDER_TINT_ID; }
+    }
+
+    public record ShootPayload(double ox, double oy, double oz,
+                                double dx, double dy, double dz,
+                                List<UUID> hits) implements CustomPayload {
+        @Override public CustomPayload.Id<ShootPayload> getId() { return COWSTRIKE_SHOOT_ID; }
+    }
+
+    public record StatePayload(boolean inContext, int ammo, boolean reloading) implements CustomPayload {
+        @Override public CustomPayload.Id<StatePayload> getId() { return COWSTRIKE_STATE_ID; }
+    }
+
     @Override
     public void onInitializeClient() {
         WallCollisionHandler.register();
         WallSimulator.registerTick();
         SpeedPadHandler.register();
+        BorderTintRenderer.register();
+        CowStrikeHitscan.register();
 
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
+            resetAll();
             WallCollisionHandler.joinGraceTicks = 40;
             if (ClientPlayNetworking.canSend(HELLO_ID)) {
                 String version = FabricLoader.getInstance()
@@ -158,12 +183,25 @@ public class DmgplusClient implements ClientModInitializer {
         ClientPlayNetworking.registerGlobalReceiver(SPEEDPAD_CONFIG_ID,
                 (payload, context) -> SpeedPadRegistry.set(payload.configs()));
 
-        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
-            WallRegistry.clear();
-            WallSimulator.clear();
-            BoostPadRegistry.clear();
-            SpeedPadRegistry.clear();
-            SpeedPadHandler.reset();
-        });
+        ClientPlayNetworking.registerGlobalReceiver(BORDER_TINT_ID,
+                (payload, context) -> BorderTintRenderer.setOutside(payload.outside()));
+
+        ClientPlayNetworking.registerGlobalReceiver(COWSTRIKE_STATE_ID,
+                (payload, context) -> CowStrikeState.update(
+                        payload.inContext(), payload.ammo(), payload.reloading()));
+
+        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> resetAll());
+    }
+
+    private static void resetAll() {
+        WallRegistry.clear();
+        WallSimulator.clear();
+        WallCollisionHandler.reset();
+        ConfigManager.reset();
+        BoostPadRegistry.clear();
+        SpeedPadRegistry.clear();
+        SpeedPadHandler.reset();
+        BorderTintRenderer.setOutside(false);
+        CowStrikeState.reset();
     }
 }

@@ -37,12 +37,15 @@ public class BoostPadMixin {
         player.setVelocity(vx, cfg.verticalSpeed(), vz);
 
         if (!cfg.soundId().isEmpty()) {
-            client.getSoundManager().play(new PositionedSoundInstance(
-                    SoundEvent.of(Identifier.of(cfg.soundId())), SoundCategory.AMBIENT,
-                    cfg.soundVolume(), cfg.soundPitch(),
-                    SoundInstance.createRandom(),
-                    player.getX(), player.getY(), player.getZ()
-            ));
+            Identifier soundId = Identifier.tryParse(cfg.soundId());
+            if (soundId != null) {
+                client.getSoundManager().play(new PositionedSoundInstance(
+                        SoundEvent.of(soundId), SoundCategory.AMBIENT,
+                        cfg.soundVolume(), cfg.soundPitch(),
+                        SoundInstance.createRandom(),
+                        player.getX(), player.getY(), player.getZ()
+                ));
+            }
         }
     }
 

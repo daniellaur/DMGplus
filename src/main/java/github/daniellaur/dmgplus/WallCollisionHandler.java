@@ -29,6 +29,16 @@ public class WallCollisionHandler {
         ClientTickEvents.START_CLIENT_TICK.register(WallCollisionHandler::tick);
     }
 
+    public static void reset() {
+        cooldowns.clear();
+        suppressTicks           = 0;
+        recentKnockbackTicks    = 0;
+        recentNearWallTicks     = 0;
+        authorizedTeleportTicks = 0;
+        joinGraceTicks          = 0;
+        nearWall                = false;
+    }
+
     private static Box inflate(Box raw, WallConfig cfg) {
         return new Box(
                 raw.minX - cfg.inflateX,

@@ -1,6 +1,7 @@
 package github.daniellaur.dmgplus;
 
 import github.daniellaur.dmgplus.client.DmgplusClient;
+import io.netty.handler.codec.DecoderException;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.minecraft.network.PacketByteBuf;
@@ -11,6 +12,11 @@ import java.util.List;
 import java.util.UUID;
 
 public class Dmgplus implements ModInitializer {
+
+    private static final int UUID_BYTES            = 16;
+    private static final int MIN_WALL_ENTRY_BYTES  = 29;
+    private static final int MIN_BOOSTPAD_BYTES    = 26;
+    private static final int MIN_SPEEDPAD_BYTES    = 11;
 
     private static final PacketCodec<PacketByteBuf, UUID> UUID_CODEC = PacketCodec.of(
             (uuid, buf) -> {
@@ -61,13 +67,19 @@ public class Dmgplus implements ModInitializer {
                     },
                     buf -> {
                         int count = buf.readInt();
-                        List<DmgplusClient.WallEntry> entries = new ArrayList<>(count);
+                        if (count < 0 || count > buf.readableBytes() / MIN_WALL_ENTRY_BYTES) {
+                            throw new DecoderException("Invalid wall snapshot count: " + count);
+                        }
+                        List<DmgplusClient.WallEntry> entries = new ArrayList<>();
                         for (int i = 0; i < count; i++) {
                             UUID uuid = new UUID(buf.readLong(), buf.readLong());
                             boolean isMgBd = buf.readBoolean();
                             double x = buf.readDouble();
                             int memberCount = buf.readInt();
-                            List<UUID> members = new ArrayList<>(memberCount);
+                            if (memberCount < 0 || memberCount > buf.readableBytes() / UUID_BYTES) {
+                                throw new DecoderException("Invalid wall member count: " + memberCount);
+                            }
+                            List<UUID> members = new ArrayList<>();
                             for (int j = 0; j < memberCount; j++) {
                                 members.add(new UUID(buf.readLong(), buf.readLong()));
                             }
@@ -148,7 +160,10 @@ public class Dmgplus implements ModInitializer {
                     },
                     buf -> {
                         int count = buf.readVarInt();
-                        List<BoostPadConfig> configs = new ArrayList<>(count);
+                        if (count < 0 || count > buf.readableBytes() / MIN_BOOSTPAD_BYTES) {
+                            throw new DecoderException("Invalid boostpad config count: " + count);
+                        }
+                        List<BoostPadConfig> configs = new ArrayList<>();
                         for (int i = 0; i < count; i++) {
                             configs.add(new BoostPadConfig(
                                     buf.readString(),
@@ -178,7 +193,10 @@ public class Dmgplus implements ModInitializer {
                     },
                     buf -> {
                         int count = buf.readVarInt();
-                        List<SpeedPadConfig> configs = new ArrayList<>(count);
+                        if (count < 0 || count > buf.readableBytes() / MIN_SPEEDPAD_BYTES) {
+                            throw new DecoderException("Invalid speedpad config count: " + count);
+                        }
+                        List<SpeedPadConfig> configs = new ArrayList<>();
                         for (int i = 0; i < count; i++) {
                             configs.add(new SpeedPadConfig(
                                     buf.readString(),
@@ -194,6 +212,56 @@ public class Dmgplus implements ModInitializer {
 
     private static final PacketCodec<PacketByteBuf, DmgplusClient.SpeedPadActivatePayload> SPEEDPAD_ACTIVATE_CODEC =
             PacketCodec.of((payload, buf) -> {}, buf -> new DmgplusClient.SpeedPadActivatePayload());
+
+    private static final PacketCodec<PacketByteBuf, DmgplusClient.BorderTintPayload> BORDER_TINT_CODEC =
+            PacketCodec.of(
+                    (payload, buf) -> buf.writeBoolean(payload.outside()),
+                    buf -> new DmgplusClient.BorderTintPayload(buf.readBoolean())
+            );
+
+    private static final PacketCodec<PacketByteBuf, DmgplusClient.ShootPayload> COWSTRIKE_SHOOT_CODEC =
+            PacketCodec.of(
+                    (payload, buf) -> {
+                        buf.writeDouble(payload.ox());
+                        buf.writeDouble(payload.oy());
+                        buf.writeDouble(payload.oz());
+                        buf.writeDouble(payload.dx());
+                        buf.writeDouble(payload.dy());
+                        buf.writeDouble(payload.dz());
+                        buf.writeInt(payload.hits().size());
+                        for (UUID id : payload.hits()) {
+                            buf.writeLong(id.getMostSignificantBits());
+                            buf.writeLong(id.getLeastSignificantBits());
+                        }
+                    },
+                    buf -> {
+                        double ox = buf.readDouble();
+                        double oy = buf.readDouble();
+                        double oz = buf.readDouble();
+                        double dx = buf.readDouble();
+                        double dy = buf.readDouble();
+                        double dz = buf.readDouble();
+                        int count = buf.readInt();
+                        if (count < 0 || count > buf.readableBytes() / UUID_BYTES) {
+                            throw new DecoderException("Invalid cowstrike hit count: " + count);
+                        }
+                        List<UUID> hits = new ArrayList<>();
+                        for (int i = 0; i < count; i++) {
+                            hits.add(new UUID(buf.readLong(), buf.readLong()));
+                        }
+                        return new DmgplusClient.ShootPayload(ox, oy, oz, dx, dy, dz, hits);
+                    }
+            );
+
+    private static final PacketCodec<PacketByteBuf, DmgplusClient.StatePayload> COWSTRIKE_STATE_CODEC =
+            PacketCodec.of(
+                    (payload, buf) -> {
+                        buf.writeBoolean(payload.inContext());
+                        buf.writeInt(payload.ammo());
+                        buf.writeBoolean(payload.reloading());
+                    },
+                    buf -> new DmgplusClient.StatePayload(buf.readBoolean(), buf.readInt(), buf.readBoolean())
+            );
 
     @Override
     public void onInitialize() {
@@ -224,5 +292,9 @@ public class Dmgplus implements ModInitializer {
         PayloadTypeRegistry.playS2C().register(DmgplusClient.AUTHORIZE_TP_ID, AUTHORIZE_TP_CODEC);
         PayloadTypeRegistry.playS2C().register(DmgplusClient.BOOSTPAD_CONFIG_ID, BOOSTPAD_CONFIG_CODEC);
         PayloadTypeRegistry.playS2C().register(DmgplusClient.SPEEDPAD_CONFIG_ID, SPEEDPAD_CONFIG_CODEC);
+        PayloadTypeRegistry.playS2C().register(DmgplusClient.BORDER_TINT_ID, BORDER_TINT_CODEC);
+
+        PayloadTypeRegistry.playC2S().register(DmgplusClient.COWSTRIKE_SHOOT_ID, COWSTRIKE_SHOOT_CODEC);
+        PayloadTypeRegistry.playS2C().register(DmgplusClient.COWSTRIKE_STATE_ID, COWSTRIKE_STATE_CODEC);
     }
 }
