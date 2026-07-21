@@ -1,3 +1,5 @@
+**Download on Modrinth:** https://modrinth.com/mod/dmgplus
+
 **This mod improves the gameplay quality for Dan's Minigames, aiming to deliver the best experience to all players from around the World!** _The mod is required to the join server._
 
 ~~----------------------------------------------------------------------------------------------------------------------------------~~
