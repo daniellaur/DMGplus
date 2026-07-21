@@ -259,8 +259,10 @@ public class Dmgplus implements ModInitializer {
                         buf.writeBoolean(payload.inContext());
                         buf.writeInt(payload.ammo());
                         buf.writeBoolean(payload.reloading());
+                        buf.writeBoolean(payload.noThrow());
                     },
-                    buf -> new DmgplusClient.StatePayload(buf.readBoolean(), buf.readInt(), buf.readBoolean())
+                    buf -> new DmgplusClient.StatePayload(
+                            buf.readBoolean(), buf.readInt(), buf.readBoolean(), buf.readBoolean())
             );
 
     @Override

@@ -40,6 +40,7 @@ public class CowStrikeHitscan {
 
         if (!justPressed) return;
         if (!CowStrikeState.isInContext()) return;
+        if (CowStrikeState.isNoThrow()) return;
         if (client.player.isSpectator()) return;
         if (client.player.getMainHandStack().getItem() != Items.CROSSBOW) return;
         if (client.player.getItemCooldownManager().isCoolingDown(client.player.getMainHandStack())) return;

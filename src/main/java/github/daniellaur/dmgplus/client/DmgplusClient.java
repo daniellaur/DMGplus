@@ -112,7 +112,7 @@ public class DmgplusClient implements ClientModInitializer {
         @Override public CustomPayload.Id<ShootPayload> getId() { return COWSTRIKE_SHOOT_ID; }
     }
 
-    public record StatePayload(boolean inContext, int ammo, boolean reloading) implements CustomPayload {
+    public record StatePayload(boolean inContext, int ammo, boolean reloading, boolean noThrow) implements CustomPayload {
         @Override public CustomPayload.Id<StatePayload> getId() { return COWSTRIKE_STATE_ID; }
     }
 
@@ -188,7 +188,7 @@ public class DmgplusClient implements ClientModInitializer {
 
         ClientPlayNetworking.registerGlobalReceiver(COWSTRIKE_STATE_ID,
                 (payload, context) -> CowStrikeState.update(
-                        payload.inContext(), payload.ammo(), payload.reloading()));
+                        payload.inContext(), payload.ammo(), payload.reloading(), payload.noThrow()));
 
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> resetAll());
     }
