@@ -1,6 +1,6 @@
-**This mod improves the gameplay quality for Dan's Minigames, aiming to deliver the best experience to all players from around the World!** _The mod is required to join server._
+**This mod improves the gameplay quality for Dan's Minigames, aiming to deliver the best experience to all players from around the World!** _The mod is required to the join server._
 
-~~----------------------------------------------------------------------------------------------------------------------~~
+~~------------------------------------------------------------------------------------------------------------------------------~~
 
 ## 🧱 Block Dash: Client Sided Walls
 Walls are fully client sided, this removes wall rubberbanding and gives perfect wall knockback. This is accomplished by rendering the walls only on the client ones they are spawned on the server. This causes zero delay between the walls and the client, because they are on the client. The knockback walls apply when hit are also generated from the client, causing zero knockback delay.
